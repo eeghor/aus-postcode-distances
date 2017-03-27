@@ -4,59 +4,58 @@ import googlemaps
 import pandas as pd
 import sys
 
-# look into postcodes
+## s e t t i n g s
+
+DAILY_CMAX = 2499
+
+## p o s t c o d e s
+
 d = pd.read_csv("auspost_postcodes/aus_subs.txt", dtype={"postcode": str})
-print("total suburbs with postcodes: {}".format(len(d)))
+print("total suburb-postcode pairs: {}".format(len(d)))
 # many suburbs share the same postcode
 d = d.drop_duplicates("postcode")
 print("unique postcodes: {}".format(len(d.postcode)))
+# make a list of state - postcode records (MSW-ACT only) to feed into Google Maps
+d = d.loc[d.loc[:,"state"].isin(["NSW","ACT"]),:]
+ogs = (d["sub"] + ' ' + d["state"] + ' ' + d["postcode"]).tolist()
+NORIGS = len(ogs)
+print("total origins from NSW-ACT: {}".format(NORIGS))
+pcs = set(list(d.postcode.unique()))
+
+## v e n u e s
+
 # load best selling NSW-ACT venues (i.e. such that Ticketek sold at least 1,000 tickets, ever)
 v = pd.read_csv("auspost_postcodes/venues_over_1K_trans.csv", dtype={"postcode": str})
 print("important NSW-ACT venues: {}".format(len(v)))
-# make a list of venue postcodes
-vns = v.postcode.tolist()
-# make a list of state - postcode records (MSW-ACT only)
-d = d.loc[d.loc[:,"state"].isin(["NSW","ACT"]),:]
-ogs = (d["sub"] + ' ' + d["state"] + ' ' + d["postcode"]).tolist()
-pcs = list(d.postcode.unique())
-print("total origins from NSW-ACT: {}".format(len(ogs)))
-psc_to_collect = set(pcs) - set(vns)
-print("there are {} non-venue postcodes to be used as origins".format(len(psc_to_collect)))
+# there may be come suplicate postcodes 
+venue_pcodes = set(v.postcode.unique())
+NVENUS = len(venue_pcodes)
+print("unique venue postcodes:", NVENUS)
 
-NDIST = len(ogs)*len(vns) - len(psc_to_collect)
-print("requests needed: {}".format(NDIST))
-print("days to collect: {:.1f}".format(NDIST/2500))
+## t a r g e t s
+
+NDIST = NORIGS*NVENUS - len(pcs & venue_pcodes)
+print("distances to be collected: {}".format(NDIST))
+print("days needed to collect: {:.1f}".format(NDIST/DAILY_CMAX))
+
 sys.exit(0)
 
-
-
-dest_lst = d["destinations"].tolist()
-
-N_PCODES = 2870  #len(dest_lst)
-N_DIST = N_PCODES*(N_PCODES - 1) - sum(range(1, N_PCODES ))
-
-print("distances to collect: {}".format(N_DIST))
-print("days needed to collect: {:.1f}".format(N_DIST/2500))
-
-
+# initiate API
 
 gmaps = googlemaps.Client(key="AIzaSyCsJnOb6VESNe9C-BXpkbrLppPA2ygCJMg")
 
-DAILY_CMAX = 2500
 ORIG_DONE = 0
+ORIG_TODO = 0
 SOFAR_THIS_ORG = 0
 
-org = dest_lst.pop()
-TOCOLLECT = N_PCODES - 1  # initially, all other postcodes but the last one
-		
 # function to collect distances; we'd like to run it with the scheduler
 def collect_distances():
 
-	global ORIG_DONE, SOFAR_THIS_ORG, TOCOLLECT
+	global ORIG_DONE, SOFAR_THIS_ORG, ORIG_TODO
 
-	if ORIG_DONE < N_DIST:  # not all origina done yet
+	if ORIG_DONE < ORIG_TODO:  # not all distances done yet
 			
-		if SOFAR_THIS_ORG + DAILY_CMAX < TOCOLLECT:  # then keep collection for this origin
+		if SOFAR_THIS_ORG + DAILY_CMAX < ORIG_TODO:  # then keep collecting for this origin
 			
 			dest = dest_lst[SOFAR_THIS_ORG:SOFAR_THIS_ORG + DAILY_CMAX]
 			
