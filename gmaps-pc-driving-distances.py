@@ -2,16 +2,43 @@ import schedule
 import time
 import googlemaps
 import pandas as pd
+import sys
 
-d = pd.read_csv("auspost_postcodes/aus_subs.txt")
-print("total postcodes: {}".format(len(d)))
+# look into postcodes
+d = pd.read_csv("auspost_postcodes/aus_subs.txt", dtype={"postcode": str})
+print("total suburbs with postcodes: {}".format(len(d)))
+# many suburbs share the same postcode
+d = d.drop_duplicates("postcode")
+print("unique postcodes: {}".format(len(d.postcode)))
+# load best selling NSW-ACT venues (i.e. such that Ticketek sold at least 1,000 tickets, ever)
+v = pd.read_csv("auspost_postcodes/venues_over_1K_trans.csv", dtype={"postcode": str})
+print("important NSW-ACT venues: {}".format(len(v)))
+# make a list of venue postcodes
+vns = v.postcode.tolist()
+# make a list of state - postcode records (MSW-ACT only)
+d = d.loc[d.loc[:,"state"].isin(["NSW","ACT"]),:]
+ogs = (d["sub"] + ' ' + d["state"] + ' ' + d["postcode"]).tolist()
+pcs = list(d.postcode.unique())
+print("total origins from NSW-ACT: {}".format(len(ogs)))
+psc_to_collect = set(pcs) - set(vns)
+print("there are {} non-venue postcodes to be used as origins".format(len(psc_to_collect)))
 
-d["destinations"] = d["sub"] + ' ' + d["state"] + ' ' + d["postcode"].map(str)
+NDIST = len(ogs)*len(vns) - len(psc_to_collect)
+print("requests needed: {}".format(NDIST))
+print("days to collect: {:.1f}".format(NDIST/2500))
+sys.exit(0)
+
+
 
 dest_lst = d["destinations"].tolist()
 
-N_PCODES = len(dest_lst)
-N_DIST = N_PCODES*(N_PCODES - 1) - sum(range(1, N_PCODES + 1) - 1)
+N_PCODES = 2870  #len(dest_lst)
+N_DIST = N_PCODES*(N_PCODES - 1) - sum(range(1, N_PCODES ))
+
+print("distances to collect: {}".format(N_DIST))
+print("days needed to collect: {:.1f}".format(N_DIST/2500))
+
+
 
 gmaps = googlemaps.Client(key="AIzaSyCsJnOb6VESNe9C-BXpkbrLppPA2ygCJMg")
 
@@ -53,7 +80,7 @@ def collect_distances():
 			dest = dest_lst[SOFAR_THIS_ORG: TOCOLLECT - DAILY_CMAX]
 			res = googlemaps.distance_matrix(origins=org, destinations=dest, units="metric", mode="driving")
 
-		return ORIG_DONE
+		print
 	
 	else:
 
